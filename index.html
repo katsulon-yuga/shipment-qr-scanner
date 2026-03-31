@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>出荷前製品 QRスキャナー</title>
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', 'Yu Gothic', sans-serif;
+      background: #111827;
+      color: #f3f4f6;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== TABS ===== */
+    .tabs {
+      display: flex;
+      background: #1f2937;
+      border-bottom: 1px solid #374151;
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      padding: 13px 8px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      color: #9ca3af;
+      transition: color 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab.active {
+      color: #ef4444;
+      border-bottom: 2px solid #ef4444;
+      font-weight: 600;
+    }
+
+    /* ===== SCREENS ===== */
+    #scanner-screen, #history-screen {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #history-screen { display: none; overflow-y: auto; }
+
+    /* ===== SCANNER ===== */
+    #video-wrap {
+      position: relative;
+      flex: 1;
+      background: #000;
+      overflow: hidden;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .scan-frame {
+      width: 220px;
+      height: 220px;
+      position: relative;
+    }
+    .scan-frame::before, .scan-frame::after,
+    .scan-frame .corner-bl, .scan-frame .corner-tr {
+      content: '';
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: #ef4444;
+      border-style: solid;
+    }
+    .scan-frame::before  { top: 0; left: 0;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .scan-frame::after   { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+    .scan-frame .corner-bl { bottom: 0; left: 0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .scan-frame .corner-tr { top: 0;    right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .scan-line {
+      position: absolute;
+      left: 4px; right: 4px;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #ef4444, transparent);
+      animation: scanline 2s ease-in-out infinite;
+      top: 0;
+    }
+    @keyframes scanline { 0%,100% { top: 4px; opacity: 0.3; } 50% { top: calc(100% - 6px); opacity: 1; } }
+
+    .scan-hint {
+      margin-top: 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    .scan-status-bar {
+      background: #1f2937;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #9ca3af;
+      text-align: center;
+      flex-shrink: 0;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #6b7280;
+      flex-shrink: 0;
+    }
+    .status-dot.active { background: #22c55e; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 50;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #1f2937;
+      border-radius: 16px 16px 0 0;
+      padding: 24px 20px 32px;
+      width: 100%;
+      max-width: 480px;
+      border-top: 1px solid #374151;
+      animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: #4b5563;
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+    .modal h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #f9fafb;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .field-label-text {
+      font-size: 12px;
+      color: #9ca3af;
+      width: 64px;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+    .field-value-box {
+      flex: 1;
+      background: #111827;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #f3f4f6;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+    }
+    .field-input-box {
+      flex: 1;
+      background: #111827;
+      border: 1.5px solid #ef4444;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #f3f4f6;
+      outline: none;
+      width: 100%;
+      -webkit-appearance: none;
+    }
+    .field-input-box:focus { border-color: #f87171; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: 700;
+      transition: opacity 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { opacity: 0.85; transform: scale(0.98); }
+    .btn-primary { background: #ef4444; color: #fff; }
+    .btn-secondary { background: #374151; color: #d1d5db; }
+    .btn-green { background: #16a34a; color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ===== HISTORY ===== */
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #374151;
+      flex-shrink: 0;
+    }
+    .history-header h2 { font-size: 15px; font-weight: 700; color: #f9fafb; }
+    .btn-clear {
+      font-size: 12px;
+      color: #6b7280;
+      background: none;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    .history-list { padding: 10px 12px 20px; }
+    .empty-msg {
+      text-align: center;
+      color: #6b7280;
+      padding: 60px 20px;
+      font-size: 14px;
+    }
+
+    .history-item {
+      background: #1f2937;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      border-left: 3px solid #ef4444;
+      position: relative;
+    }
+    .history-item.corrected {
+      opacity: 0.45;
+      border-left-color: #4b5563;
+    }
+    .history-item.correction {
+      border-left-color: #22c55e;
+    }
+
+    .history-item-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .history-time { font-size: 11px; color: #6b7280; }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .badge-correction { background: #166534; color: #86efac; }
+    .badge-corrected  { background: #374151; color: #9ca3af; }
+
+    .history-body {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .h-spec { font-size: 13px; color: #9ca3af; flex: 1; }
+    .h-qty  { font-size: 22px; font-weight: 800; color: #f3f4f6; }
+    .h-qty-unit { font-size: 13px; color: #9ca3af; }
+
+    .history-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+    .btn-correct {
+      font-size: 12px;
+      color: #93c5fd;
+      background: #1e3a5f;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-correct:active { opacity: 0.7; }
+
+    /* ===== TOAST ===== */
+    .toast {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #064e3b;
+      color: #6ee7b7;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      white-space: nowrap;
+      border: 1px solid #065f46;
+    }
+    .toast.error { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+    .toast.show { opacity: 1; }
+
+    /* ===== LOADING ===== */
+    .loader {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 5;
+      gap: 14px;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #374151;
+      border-top-color: #ef4444;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" id="tab-scanner" onclick="showScreen('scanner')">📷 スキャン</div>
+  <div class="tab" id="tab-history" onclick="showScreen('history')">📋 履歴</div>
+</div>
+
+<!-- Scanner Screen -->
+<div id="scanner-screen">
+  <div id="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      <span>カメラ起動中...</span>
+    </div>
+    <div class="scan-overlay">
+      <div class="scan-frame">
+        <div class="corner-bl"></div>
+        <div class="corner-tr"></div>
+        <div class="scan-line"></div>
+      </div>
+      <div class="scan-hint">QRコードを枠内に合わせてください</div>
+    </div>
+  </div>
+  <div class="scan-status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="scan-status-text">起動中...</span>
+  </div>
+</div>
+
+<!-- History Screen -->
+<div id="history-screen">
+  <div class="history-header">
+    <h2>送信履歴</h2>
+    <button class="btn-clear" onclick="clearHistory()">履歴をクリア</button>
+  </div>
+  <div class="history-list" id="history-list"></div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>📦 スキャン確認</h2>
+    <div class="field-row">
+      <div class="field-label-text">規格NO</div>
+      <div class="field-value-box" id="modal-spec-no">-</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label-text">数量</div>
+      <input class="field-input-box" id="modal-qty" type="number" min="0" inputmode="numeric" placeholder="数量を入力">
+    </div>
+    <button class="btn btn-primary" id="submit-btn" onclick="submitForm()">送信する</button>
+    <button class="btn btn-secondary" onclick="closeModal('confirm-modal')">キャンセル</button>
+  </div>
+</div>
+
+<!-- Correction Modal -->
+<div class="modal-overlay" id="correction-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>✏️ 数量訂正</h2>
+    <div class="field-row">
+      <div class="field-label-text">規格NO</div>
+      <div class="field-value-box" id="cor-spec-no">-</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label-text">元の数量</div>
+      <div class="field-value-box" id="cor-orig-qty" style="color:#f87171;">-</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label-text">訂正数量</div>
+      <input class="field-input-box" id="cor-new-qty" type="number" min="0" inputmode="numeric" placeholder="正しい数量">
+    </div>
+    <button class="btn btn-green" onclick="submitCorrection()">訂正を送信</button>
+    <button class="btn btn-secondary" onclick="closeModal('correction-modal')">キャンセル</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ==============================
+//  設定：Googleフォームのエントリー定義
+// ==============================
+const FORM_CONFIGS = {
+  '1FAIpQLSfKq787IZqxuk5o11hvXotTD46oRVjSYNjAmEQ5lT8srEvdFw': {
+    name: '出荷前製品ラベル (N2)',
+    specField: 'entry.2120075355',
+    qtyField: 'entry.1589026180'
+  },
+  '1FAIpQLScfzwhsqYCxAUYA93IcLhav_lYw4vSHjo581_T5Q-Xh2lJZUg': {
+    name: '出荷完了QR',
+    specField: 'entry.187961181',
+    qtyField: 'entry.1130382692'
+  },
+  '1FAIpQLSelgbjo4wkr7EAFW8A8fQ2-YWjX8XvTlvurv6x7v8ZssvuZGQ': {
+    name: 'その他QR',
+    specField: 'entry.1377959495',
+    qtyField: 'entry.922963243'
+  }
+};
+
+const STORAGE_KEY = 'shipment_qr_history_v2';
+
+// ==============================
+//  状態管理
+// ==============================
+let codeReader = null;
+let currentScanData = null;
+let correctionTargetId = null;
+let isReady = false;
+let lastCode = '';
+let lastCodeTime = 0;
+const DEBOUNCE_MS = 4000;
+
+// ==============================
+//  カメラ・スキャン
+// ==============================
+async function initScanner() {
+  setStatus('カメラ起動中...', false);
+  try {
+    if (typeof ZXing === 'undefined') {
+      throw new Error('スキャンライブラリの読み込みに失敗しました。インターネット接続を確認してください。');
+    }
+    codeReader = new ZXing.BrowserQRCodeReader();
+    const devices = await codeReader.listVideoInputDevices();
+    if (!devices || devices.length === 0) throw new Error('カメラが見つかりません');
+
+    // 背面カメラ優先
+    const back = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    const deviceId = back.deviceId;
+
+    await codeReader.decodeFromVideoDevice(deviceId, document.getElementById('video'), (result, err) => {
+      if (result) {
+        const code = result.getText();
+        const now = Date.now();
+        if (code === lastCode && now - lastCodeTime < DEBOUNCE_MS) return;
+        lastCode = code;
+        lastCodeTime = now;
+        handleQR(code);
+      }
+    });
+
+    document.getElementById('loader').style.display = 'none';
+    setStatus('スキャン待機中', true);
+    isReady = true;
+  } catch (e) {
+    document.getElementById('loader').innerHTML = `
+      <span style="font-size:32px">📷</span>
+      <span style="color:#f87171;font-size:14px;text-align:center;padding:0 24px">${e.message || 'カメラエラー'}</span>
+      <button onclick="location.reload()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;margin-top:8px">再試行</button>
+    `;
+    setStatus('カメラエラー', false);
+  }
+}
+
+function setStatus(msg, active) {
+  document.getElementById('scan-status-text').textContent = msg;
+  document.getElementById('status-dot').className = 'status-dot' + (active ? ' active' : '');
+}
+
+// ==============================
+//  QR解析
+// ==============================
+function parseQR(url) {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes('google.com')) return null;
+    const m = parsed.pathname.match(/\/forms\/d\/e\/([^\/]+)/);
+    if (!m) return null;
+    const formId = m[1];
+    const cfg = FORM_CONFIGS[formId];
+    if (!cfg) return null;
+    const p = new URLSearchParams(parsed.search);
+    return {
+      formId,
+      formName: cfg.name,
+      specNo: p.get(cfg.specField) || '',
+      qty: p.get(cfg.qtyField) || '',
+      formAction: `https://docs.google.com/forms/d/e/${formId}/formResponse`,
+      specField: cfg.specField,
+      qtyField: cfg.qtyField
+    };
+  } catch { return null; }
+}
+
+function handleQR(code) {
+  const data = parseQR(code);
+  if (!data) {
+    setStatus('⚠️ 対応していないQRコードです', true);
+    showToast('このQRコードは対応していません', true);
+    setTimeout(() => setStatus('スキャン待機中', true), 2500);
+    return;
+  }
+  currentScanData = data;
+  document.getElementById('modal-spec-no').textContent = data.specNo || '(データなし)';
+  document.getElementById('modal-qty').value = data.qty;
+  setStatus('QRコード検出！', true);
+  showModal('confirm-modal');
+  setTimeout(() => document.getElementById('modal-qty').focus(), 350);
+}
+
+// ==============================
+//  フォーム送信
+// ==============================
+async function submitForm() {
+  if (!currentScanData) return;
+  const qty = document.getElementById('modal-qty').value.trim();
+  if (qty === '' || isNaN(Number(qty))) {
+    showToast('数量を正しく入力してください', true);
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.textContent = '送信中...';
+  btn.disabled = true;
+
+  try {
+    const body = new URLSearchParams();
+    body.set(currentScanData.specField, currentScanData.specNo);
+    body.set(currentScanData.qtyField, qty);
+
+    await fetch(currentScanData.formAction, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    addHistory({
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      specNo: currentScanData.specNo,
+      qty: qty,
+      formId: currentScanData.formId,
+      formName: currentScanData.formName,
+      formAction: currentScanData.formAction,
+      specField: currentScanData.specField,
+      qtyField: currentScanData.qtyField,
+      status: 'submitted'
+    });
+
+    closeModal('confirm-modal');
+    showToast('✅ 送信しました');
+    setStatus('スキャン待機中', true);
+    currentScanData = null;
+  } catch (e) {
+    showToast('送信エラー: ' + e.message, true);
+  } finally {
+    btn.textContent = '送信する';
+    btn.disabled = false;
+  }
+}
+
+// ==============================
+//  訂正送信
+// ==============================
+function openCorrection(id) {
+  const item = getHistory().find(h => h.id === id);
+  if (!item) return;
+  correctionTargetId = id;
+  document.getElementById('cor-spec-no').textContent = item.specNo;
+  document.getElementById('cor-orig-qty').textContent = item.qty + ' 個';
+  document.getElementById('cor-new-qty').value = '';
+  showModal('correction-modal');
+  setTimeout(() => document.getElementById('cor-new-qty').focus(), 350);
+}
+
+async function submitCorrection() {
+  if (!correctionTargetId) return;
+  const item = getHistory().find(h => h.id === correctionTargetId);
+  if (!item) return;
+
+  const newQty = document.getElementById('cor-new-qty').value.trim();
+  if (newQty === '' || isNaN(Number(newQty))) {
+    showToast('訂正数量を正しく入力してください', true);
+    return;
+  }
+
+  try {
+    const body = new URLSearchParams();
+    body.set(item.specField, item.specNo);
+    body.set(item.qtyField, newQty);
+
+    await fetch(item.formAction, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    updateHistory(correctionTargetId, { status: 'corrected' });
+
+    addHistory({
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      specNo: item.specNo,
+      qty: newQty,
+      formId: item.formId,
+      formName: item.formName,
+      formAction: item.formAction,
+      specField: item.specField,
+      qtyField: item.qtyField,
+      status: 'correction',
+      corrects: correctionTargetId
+    });
+
+    closeModal('correction-modal');
+    showToast('✅ 訂正を送信しました');
+    renderHistory();
+  } catch (e) {
+    showToast('送信エラー: ' + e.message, true);
+  }
+}
+
+// ==============================
+//  履歴管理
+// ==============================
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveHistory(arr) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+function addHistory(entry) {
+  const arr = getHistory();
+  arr.unshift(entry);
+  saveHistory(arr);
+}
+function updateHistory(id, patch) {
+  const arr = getHistory();
+  const i = arr.findIndex(h => h.id === id);
+  if (i >= 0) { arr[i] = { ...arr[i], ...patch }; saveHistory(arr); }
+}
+function clearHistory() {
+  if (!confirm('履歴をすべて削除しますか？')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  renderHistory();
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const el = document.getElementById('history-list');
+  if (history.length === 0) {
+    el.innerHTML = '<div class="empty-msg">📭 まだ送信履歴がありません</div>';
+    return;
+  }
+
+  el.innerHTML = history.map(item => {
+    const dt = new Date(item.timestamp);
+    const dateStr = dt.toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const isCorrected = item.status === 'corrected';
+    const isCorrection = item.status === 'correction';
+
+    let badge = '';
+    if (isCorrection) badge = '<span class="badge badge-correction">訂正</span>';
+    if (isCorrected)  badge = '<span class="badge badge-corrected">訂正済</span>';
+
+    return `
+      <div class="history-item ${isCorrected ? 'corrected' : ''} ${isCorrection ? 'correction' : ''}">
+        <div class="history-item-header">
+          <span class="history-time">${dateStr}</span>
+          ${badge}
+        </div>
+        <div class="history-body">
+          <div class="h-spec">${escHtml(item.specNo) || '(不明)'}</div>
+          <div class="h-qty">${escHtml(item.qty)}</div>
+          <div class="h-qty-unit">個</div>
+        </div>
+        ${!isCorrected ? `
+        <div class="history-footer">
+          <button class="btn-correct" onclick="openCorrection('${item.id}')">数量を訂正する</button>
+        </div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ==============================
+//  UI ユーティリティ
+// ==============================
+function showModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  if (id === 'confirm-modal') {
+    currentScanData = null;
+    // リセット: 同じQRを再スキャンできるように
+    setTimeout(() => { lastCode = ''; lastCodeTime = 0; }, 500);
+    setStatus('スキャン待機中', isReady);
+  }
+}
+
+// モーダル外タップで閉じる
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) {
+      closeModal(overlay.id);
+    }
+  });
+});
+
+let toastTimer = null;
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isError ? ' error' : '') + ' show';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function showScreen(name) {
+  document.getElementById('tab-scanner').className = 'tab' + (name === 'scanner' ? ' active' : '');
+  document.getElementById('tab-history').className  = 'tab' + (name === 'history'  ? ' active' : '');
+  document.getElementById('scanner-screen').style.display = name === 'scanner' ? '' : 'none';
+  document.getElementById('history-screen').style.display = name === 'history'  ? '' : 'none';
+  if (name === 'history') renderHistory();
+}
+
+// Enterキーで送信
+document.getElementById('modal-qty').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitForm();
+});
+document.getElementById('cor-new-qty').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitCorrection();
+});
+
+// ==============================
+//  起動
+// ==============================
+initScanner();
+</script>
+</body>
+</html>
