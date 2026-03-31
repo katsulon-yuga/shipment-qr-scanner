@@ -509,6 +509,15 @@ const FORM_CONFIGS = {
 const STORAGE_KEY = 'shipment_qr_history_v3';
 
 // ==============================
+//  Google Apps Script（スプレッドシート書き込み）
+// ==============================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzr7orJSAh-5uH2qzPcn7pZYkvK9ABwMvXveeIdHS3fOr3nKGtHWW7PtFplM1sGDR2OTA/exec';
+
+function sendToGAS(params) {
+  fetch(GAS_URL + '?' + new URLSearchParams(params), { mode: 'no-cors' }).catch(() => {});
+}
+
+// ==============================
 //  状態管理
 // ==============================
 let codeReader = null;
@@ -667,6 +676,15 @@ async function submitForm() {
   };
   addHistory(historyEntry);
 
+  // スプレッドシートへ書き込み（Apps Script）
+  sendToGAS({
+    action: 'submit',
+    specNo: currentScanData.specNo,
+    qty: qty,
+    gentan: selectedGentan || '',
+    id: historyEntry.id
+  });
+
   try {
     const body = new URLSearchParams();
     body.set(currentScanData.specField, currentScanData.specNo);
@@ -738,7 +756,7 @@ async function submitCorrection() {
 
   // 履歴を先に更新
   updateHistory(correctionTargetId, { status: 'corrected' });
-  addHistory({
+  const correctionEntry = {
     id: Date.now().toString(),
     timestamp: new Date().toISOString(),
     specNo: item.specNo,
@@ -752,6 +770,15 @@ async function submitCorrection() {
     gentanField: item.gentanField,
     status: 'correction',
     corrects: correctionTargetId
+  };
+  addHistory(correctionEntry);
+
+  // スプレッドシートへ訂正書き込み（Apps Script）
+  sendToGAS({
+    action: 'correct',
+    id: correctionTargetId,
+    qty: newQty,
+    gentan: selectedCorGentan || item.gentan || ''
   });
 
   try {
@@ -881,8 +908,8 @@ function showToast(msg, isError = false) {
 function showScreen(name) {
   document.getElementById('tab-scanner').className = 'tab' + (name === 'scanner' ? ' active' : '');
   document.getElementById('tab-history').className  = 'tab' + (name === 'history'  ? ' active' : '');
-  document.getElementById('scanner-screen').style.display = name === 'scanner' ? '' : 'none';
-  document.getElementById('history-screen').style.display = name === 'history'  ? '' : 'none';
+  document.getElementById('scanner-screen').style.display = name === 'scanner' ? 'flex' : 'none';
+  document.getElementById('history-screen').style.display = name === 'history'  ? 'flex' : 'none';
   if (name === 'history') renderHistory();
 }
 
