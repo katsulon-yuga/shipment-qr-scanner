@@ -986,6 +986,26 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==============================
+//  バックグラウンド復帰時にカメラ自動再起動
+// ==============================
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const videoEl = document.getElementById('video');
+    const stream = videoEl && videoEl.srcObject;
+    const active = stream && stream.getVideoTracks().some(t => t.readyState === 'live');
+    if (!active) {
+      // カメラが止まっていたら再起動
+      if (codeReader) { try { codeReader.reset(); } catch (_) {} }
+      codeReader = null;
+      isReady = false;
+      document.getElementById('loader').style.display = 'flex';
+      document.getElementById('loader').innerHTML = '<div class="spinner"></div><span>カメラ再起動中...</span>';
+      initScanner();
+    }
+  }
+});
+
+// ==============================
 //  起動
 // ==============================
 initNumericInput(document.getElementById('modal-qty'));
