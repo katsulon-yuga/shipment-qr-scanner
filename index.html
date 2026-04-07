@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>出荷前製品 QRスキャナー</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="QRスキャナー">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -972,6 +977,13 @@ document.getElementById('modal-qty').addEventListener('keydown', e => {
 document.getElementById('cor-new-qty').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitCorrection();
 });
+
+// ==============================
+//  Service Worker 登録（PWA）
+// ==============================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/shipment-qr-scanner/sw.js').catch(() => {});
+}
 
 // ==============================
 //  起動
