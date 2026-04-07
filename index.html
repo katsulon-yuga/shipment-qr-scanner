@@ -511,17 +511,20 @@ const FORM_CONFIGS = {
     name: '出荷前製品ラベル (N2)',
     specField: 'entry.2120075355',
     qtyField: 'entry.1589026180',
-    gentanField: 'entry.788920497'   // 原反？フィールド
+    gentanField: 'entry.788920497',
+    gasType: 'count'   // 棚卸シートに書き込み
   },
   '1FAIpQLScfzwhsqYCxAUYA93IcLhav_lYw4vSHjo581_T5Q-Xh2lJZUg': {
-    name: '出荷完了QR',
+    name: '製造完了QR',
     specField: 'entry.187961181',
-    qtyField: 'entry.1130382692'
+    qtyField: 'entry.1130382692',
+    gasType: 'mfg'     // 製造完了シートに書き込み
   },
   '1FAIpQLSelgbjo4wkr7EAFW8A8fQ2-YWjX8XvTlvurv6x7v8ZssvuZGQ': {
-    name: 'その他QR',
+    name: '出荷完了QR',
     specField: 'entry.1377959495',
-    qtyField: 'entry.922963243'
+    qtyField: 'entry.922963243',
+    gasType: 'ship'    // 出荷完了シートに書き込み
   }
 };
 
@@ -530,7 +533,7 @@ const STORAGE_KEY = 'shipment_qr_history_v3';
 // ==============================
 //  Google Apps Script（スプレッドシート書き込み）
 // ==============================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzr7orJSAh-5uH2qzPcn7pZYkvK9ABwMvXveeIdHS3fOr3nKGtHWW7PtFplM1sGDR2OTA/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx9n0stBzlMvYjfUKQa7J7MxLG-8JIam47Y0OM6ijuGzwqovtAMwxsTqFiNEMNgTsB4Yw/exec';
 
 function sendToGAS(params) {
   fetch(GAS_URL + '?' + new URLSearchParams(params), { mode: 'no-cors' }).catch(() => {});
@@ -612,6 +615,7 @@ function parseQR(url) {
       specNo: p.get(cfg.specField) || '',
       qty: p.get(cfg.qtyField) || '',
       hasGentan: !!cfg.gentanField,
+      gasType: cfg.gasType || 'ship',
       formAction: `https://docs.google.com/forms/d/e/${formId}/formResponse`,
       specField: cfg.specField,
       qtyField: cfg.qtyField,
@@ -685,6 +689,7 @@ function submitForm() {
     specNo: currentScanData.specNo,
     qty: qty,
     gentan: selectedGentan || null,
+    gasType: currentScanData.gasType || 'ship',
     formId: currentScanData.formId,
     formName: currentScanData.formName,
     formAction: currentScanData.formAction,
@@ -697,11 +702,10 @@ function submitForm() {
 
   // スプレッドシートへ書き込み（Apps Script）
   sendToGAS({
-    action: 'submit',
-    specNo: currentScanData.specNo,
+    type: currentScanData.gasType || 'ship',
+    spec: currentScanData.specNo,
     qty: qty,
-    gentan: selectedGentan || '',
-    id: historyEntry.id
+    isHara: (selectedGentan === '原反') ? '1' : ''
   });
 
   closeModal('confirm-modal');
@@ -846,8 +850,8 @@ function submitCorrection() {
   addHistory(newCorrEntry);
 
   // スプレッドシートへ2件送信（Apps Script）
-  sendToGAS({ action: 'submit', specNo: item.specNo, qty: cancelQty, gentan: item.gentan || '', id: cancelEntry.id });
-  sendToGAS({ action: 'submit', specNo: item.specNo, qty: newQty, gentan: selectedCorGentan || item.gentan || '', id: newCorrEntry.id });
+  sendToGAS({ type: item.gasType || 'ship', spec: item.specNo, qty: cancelQty, isHara: (item.gentan === '原反') ? '1' : '' });
+  sendToGAS({ type: item.gasType || 'ship', spec: item.specNo, qty: newQty, isHara: ((selectedCorGentan || item.gentan) === '原反') ? '1' : '' });
 
   closeModal('correction-modal');
   showToast('✅ 訂正を送信しました（2件）');
