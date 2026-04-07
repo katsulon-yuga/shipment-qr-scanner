@@ -452,7 +452,7 @@
       <div class="field-label-text" style="padding-top:10px;">原反？</div>
       <div class="gentan-group">
         <button class="btn-gentan" id="btn-gentan-yes" onclick="selectGentan('原反')">原反</button>
-        <button class="btn-gentan" id="btn-gentan-no"  onclick="selectGentan('原反ではない')">原反ではない</button>
+        <button class="btn-gentan" id="btn-gentan-no"  onclick="selectGentan('完成品')">完成品</button>
       </div>
     </div>
     <button class="btn btn-primary" id="submit-btn" onclick="submitForm()">送信する</button>
@@ -487,7 +487,7 @@
       <div class="field-label-text" style="padding-top:10px;">原反？</div>
       <div class="gentan-group">
         <button class="btn-gentan" id="cor-btn-gentan-yes" onclick="selectCorGentan('原反')">原反</button>
-        <button class="btn-gentan" id="cor-btn-gentan-no"  onclick="selectCorGentan('原反ではない')">原反ではない</button>
+        <button class="btn-gentan" id="cor-btn-gentan-no"  onclick="selectCorGentan('完成品')">完成品</button>
       </div>
     </div>
     <button class="btn btn-green" onclick="submitCorrection()">訂正を送信</button>
@@ -645,12 +645,12 @@ function handleQR(code) {
 function selectGentan(val) {
   selectedGentan = val;
   document.getElementById('btn-gentan-yes').className = 'btn-gentan' + (val === '原反' ? ' selected' : '');
-  document.getElementById('btn-gentan-no').className  = 'btn-gentan' + (val === '原反ではない' ? ' selected' : '');
+  document.getElementById('btn-gentan-no').className  = 'btn-gentan' + (val === '完成品' ? ' selected' : '');
 }
 function selectCorGentan(val) {
   selectedCorGentan = val;
   document.getElementById('cor-btn-gentan-yes').className = 'btn-gentan' + (val === '原反' ? ' selected' : '');
-  document.getElementById('cor-btn-gentan-no').className  = 'btn-gentan' + (val === '原反ではない' ? ' selected' : '');
+  document.getElementById('cor-btn-gentan-no').className  = 'btn-gentan' + (val === '完成品' ? ' selected' : '');
 }
 
 // ==============================
@@ -665,7 +665,7 @@ function submitForm() {
     return;
   }
   if (currentScanData.hasGentan && !selectedGentan) {
-    showToast('「原反」か「原反ではない」を選択してください', true);
+    showToast('「原反」か「完成品」を選択してください', true);
     return;
   }
 
@@ -793,7 +793,7 @@ function submitCorrection() {
     return;
   }
   if (item.gentanField && !selectedCorGentan) {
-    showToast('「原反」か「原反ではない」を選択してください', true);
+    showToast('「原反」か「完成品」を選択してください', true);
     return;
   }
 
