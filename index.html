@@ -444,6 +444,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>📦 スキャン確認</h2>
+    <div id="modal-type-label" style="text-align:center; font-size:0.85rem; font-weight:600; color:#fff; background:#2563eb; border-radius:6px; padding:4px 12px; margin-bottom:10px; display:inline-block;"></div>
     <div class="field-row">
       <div class="field-label-text">規格NO</div>
       <div class="field-value-box" id="modal-spec-no">-</div>
@@ -636,6 +637,13 @@ function handleQR(code) {
   currentScanData = data;
   selectedGentan = '';
 
+  // QR種別ラベル表示
+  const typeLabels = { count: '① 棚卸カウント', mfg: '② 生産完了', ship: '③ 出荷完了' };
+  const typeColors = { count: '#059669', mfg: '#d97706', ship: '#2563eb' };
+  const typeLabelEl = document.getElementById('modal-type-label');
+  typeLabelEl.textContent = typeLabels[data.gasType] || data.formName || '';
+  typeLabelEl.style.background = typeColors[data.gasType] || '#2563eb';
+
   document.getElementById('modal-spec-no').textContent = data.specNo || '(データなし)';
   document.getElementById('modal-qty').value = data.qty;
 
@@ -819,6 +827,7 @@ function submitCorrection() {
     specNo: item.specNo,
     qty: cancelQty,
     gentan: item.gentan || null,
+    gasType: item.gasType || 'ship',
     formId: item.formId,
     formName: item.formName,
     formAction: item.formAction,
@@ -836,6 +845,7 @@ function submitCorrection() {
     specNo: item.specNo,
     qty: newQty,
     gentan: selectedCorGentan || item.gentan || null,
+    gasType: item.gasType || 'ship',
     formId: item.formId,
     formName: item.formName,
     formAction: item.formAction,
